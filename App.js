@@ -11,11 +11,16 @@ import {
 } from "react-native-paper";
 import myColors from "./assets/colors.json";
 import myColorsDark from "./assets/colorsDark.json";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import * as SQLite from 'expo-sqlite';
+
 
 export default function App() {
   const [isSwitchOn, setIsSwitchOn] = useState(false); // variável para controle do darkMode
   const [isLoading, setIsLoading] = useState(false); // variável para controle do loading do button
   const [locations, setLocations] = useState(null); // variável para armazenar as localizações
+  const [errorMsg, setErrorMsg] = useState(null);
 
   // Carrega tema default da lib RN PAPER com customização das cores. Para customizar o tema, veja:
   // https://callstack.github.io/react-native-paper/docs/guides/theming/#creating-dynamic-theme-colors
@@ -25,26 +30,55 @@ export default function App() {
     colors: myColors.colors,
   });
 
+  const salvarDarkMode = async (value) => {
+    try {
+    await AsyncStorage.setItem('@darkMode', String(value))
+    } catch ( e ) {
+      console.error('Erro ao salvar dark mode:', e);
+    }
+    }
+
+    const getDarkMode = async ( ) => {
+      try {
+      const value = await AsyncStorage.getItem('@darkMode')
+      if(value !== null) {
+        return value === 'true';
+      }
+      } catch (e) {
+        console.error('Erro ao carregar dark mode:', e);
+      }
+      }
+      
+
   // load darkMode from AsyncStorage
-  async function loadDarkMode() {}
+  async function loadDarkMode() {
+    const isDark = await getDarkMode();
+    setIsSwitchOn(isDark);
+  }
 
   // darkMode switch event
   async function onToggleSwitch() {
-    setIsSwitchOn(!isSwitchOn);
+    const novoValor = !isSwitchOn;
+    await salvarDarkMode(novoValor);
+    setIsSwitchOn(novoValor);
   }
 
   // get location (bottao capturar localização)
   async function getLocation() {
     setIsLoading(true);
+    // setErrorMsg(null);
 
-    // Localização fake, substituir por localização real do dispositivo
-    const coords = {
-      latitude: -23.5505199,
-      longitude: -46.6333094,
-    };
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setErrorMsg('Permissão de localização negada.');
+      setIsLoading(false)
+      return;
+    }
 
+    let location = await Location.getCurrentPositionAsync({});
+    setLocations(location);
     setIsLoading(false);
-  }
+}
 
   // load locations from db sqlite - faz a leitura das localizações salvas no banco de dados
   async function loadLocations() {
