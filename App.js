@@ -13,8 +13,9 @@ import myColors from "./assets/colors.json";
 import myColorsDark from "./assets/colorsDark.json";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import * as SQLite from 'expo-sqlite';
+import openDB from "./db";
 
+const db = openDB();
 
 export default function App() {
   const [isSwitchOn, setIsSwitchOn] = useState(false); // variável para controle do darkMode
@@ -66,36 +67,46 @@ export default function App() {
   // get location (bottao capturar localização)
   async function getLocation() {
     setIsLoading(true);
-    // setErrorMsg(null);
 
+    console.log("Solicitando permissão...");
     let { status } = await Location.requestForegroundPermissionsAsync();
+    console.log("Status da permissão:", status);
+
     if (status !== 'granted') {
       setErrorMsg('Permissão de localização negada.');
       setIsLoading(false)
       return;
     }
 
+    console.log("Obtendo localização...");
     let location = await Location.getCurrentPositionAsync({});
-    setLocations(location);
+    console.log("Localização obtida:", location);
+
+    const { latitude, longitude } = location.coords;
+
+    try {
+      await db.runAsync(
+        "INSERT INTO locations (latitude, longitude) VALUES (?, ?);",
+        [latitude, longitude]
+      );
+      console.log("Localização salva no banco.");
+      await loadLocations();
+    } catch (error) {
+      console.error("Erro ao inserir localização:", error);
+    }
+  
     setIsLoading(false);
-}
+  }
 
   // load locations from db sqlite - faz a leitura das localizações salvas no banco de dados
   async function loadLocations() {
-    setIsLoading(true);
-
-    // generate fake locations
-    const locations = [];
-    for (let i = 0; i < 5; i++) {
-      locations.push({
-        id: i,
-        latitude: -23.5505199 + i,
-        longitude: -46.6333094 + i,
-      });
+    try {
+      const allRows = await db.getAllAsync("SELECT * FROM locations ORDER BY id DESC;");
+      console.log("Localizações carregadas:", allRows);
+      setLocations(allRows);
+    } catch (error) {
+      console.error("Erro ao carregar localizações:", error);
     }
-
-    setLocations(locations);
-    setIsLoading(false);
   }
 
   // Use Effect para carregar o darkMode e as localizações salvas no banco de dados
@@ -130,7 +141,10 @@ export default function App() {
           icon="map"
           mode="contained"
           loading={isLoading}
-          onPress={() => getLocation()}
+          onPress={() =>  {
+            console.log("Botão pressionado");
+            getLocation();
+          }}
         >
           Capturar localização
         </Button>
